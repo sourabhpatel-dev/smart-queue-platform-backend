@@ -1,0 +1,211 @@
+# Smart Queue Platform — base configuration.
+#
+# All connection secrets come from environment variables (never hard-coded).
+# Safe local-development defaults apply when variables are unset; see
+# .env.example and docs/database/README.md.
+#
+# Profiles: none yet. Tests override the datasource via Testcontainers
+# @ServiceConnection (see PostgresInfrastructureTests). Do not introduce a
+# profile hierarchy until a real environment needs one.
+
+spring:
+  application:
+    name: smart-queue-platform
+
+  autoconfigure:
+    # Authentication runs from the application's own app_user table
+    # (see ADR-021) — without this exclusion Boot generates a misleading
+    # in-memory user and logs its password at startup.
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:smartqueue}
+    username: ${DB_USERNAME:smartqueue}
+    password: ${DB_PASSWORD:smartqueue}
+
+  data:
+    redis:
+      # Derived/ephemeral state only — PostgreSQL remains the source of truth.
+      # No password locally by design (see ADR-017); production auth/topology
+      # are deferred deployment concerns.
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  jpa:
+    hibernate:
+      # Flyway owns the schema. Hibernate must never create/update it.
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    # Migration naming convention: V<version>__<description>.sql
+    # (e.g. V1__baseline.sql, V2_1__add_organization.sql). See docs/database/.
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+queue:
+  aging:
+    # Walk-in aging policy (ADR-014) — project policy, not industry standard.
+    # Static configuration: changes require a restart. Invalid values fail
+    # fast at startup (validated in QueueAgingProperties).
+    enabled: true
+    interval-minutes: 15
+    max-promotions: 3
+
+  realtime:
+    refresh:
+      # Live wait-time freshness (ADR-020): active queues holding live
+      # entries are rebuilt every interval so aging/wait drift stays bounded.
+      # Must remain below the 5-minute snapshot TTL (a healthy scheduler
+      # renews each key several times per TTL window). ISO-8601 duration
+      # (PT1M, PT30S) — Boot-style suffixes such as 1m bind here but the
+      # @Scheduled delay parser only accepts ISO-8601 or millis. Static
+      # configuration: changes require a restart. A zero/negative interval
+      # fails fast at startup (validated in QueueRealtimeRefreshProperties).
+      enabled: true
+      interval: PT1M
+
+appointment:
+  reminders:
+    # Upcoming-appointment reminders (ADR-034): a scheduled sweep finds
+    # active appointments starting within `before` (reminderDueAt =
+    # startAt - before, compared as instants) and delivers one in-app
+    # notification per appointment through the existing center.
+    # ISO-8601 durations (PT24H, PT10M). Static configuration: changes
+    # require a restart. Zero/negative values fail fast at startup
+    # (validated in AppointmentReminderProperties). Set `enabled: false`
+    # to disable reminders entirely (booking, reads, realtime, and
+    # retention keep working).
+    # Overridable via environment as APPOINTMENT_REMINDERS_*.
+    enabled: true
+    before: PT24H
+    interval: PT10M
+
+analytics:
+  # Operational reporting bounds (ADR-035): a single overview request
+  # may cover at most `max-range-days` (default 366 — a full year plus
+  # one day, so leap-year-spanning annual reports stay valid).
+  # Overlong ranges are rejected, never truncated. Static
+  # configuration: changes require a restart. Must stay positive
+  # (fail fast at startup, like every other policy).
+  # Overridable via environment as ANALYTICS_MAX_RANGE_DAYS.
+  max-range-days: 366
+
+notifications:
+  retention:
+    # In-app notification retention (ADR-033): the notification table
+    # cannot grow without bound. Read rows older than `read-after` and
+    # unread rows older than `unread-after` (both anchored on
+    # notification creation time) are deleted by a scheduled sweep
+    # every `interval`. ISO-8601 durations (P90D, P365D, PT6H).
+    # Static configuration: changes require a restart. Zero/negative
+    # values fail fast at startup (validated in
+    # NotificationRetentionProperties). Set `enabled: false` to disable
+    # cleanup entirely (creation, reads, and realtime keep working).
+    # Overridable via environment as NOTIFICATIONS_RETENTION_*.
+    enabled: true
+    read-after: P90D
+    unread-after: P365D
+    interval: PT6H
+
+security:
+  jwt:
+    # Access-token signing (ADR-021). The secret comes ONLY from the
+    # JWT_SECRET environment variable — there is intentionally no default:
+    # startup fails fast when it is missing or shorter than 32 bytes
+    # (validated in AuthProperties). Copy .env.example to .env and set a
+    # strong random value; never commit a real secret. Tokens live for
+    # `expiration` (default one hour, short-lived by design — no refresh
+    # tokens in this phase). Static configuration: changes require a restart.
+    secret: ${JWT_SECRET:change-me-to-at-least-32-bytes-of-randomness}
+    expiration: PT1H
+
+app:
+  cors:
+    # Browser CORS allow-list for the React frontend (ADR-028). Default is
+    # the local Vite dev server only. Production operators set the exact
+    # frontend origin(s) here (or APP_CORS_ALLOWED_ORIGINS) — never "*".
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+
+  account:
+    # Account lifecycle policy (ADR-037): single-use token lifetimes and
+    # password rules. Static configuration: changes require a restart;
+    # non-positive TTLs fail fast at startup.
+    # Overridable via environment as APP_ACCOUNT_*.
+    verification-token-ttl: P1D
+    reset-token-ttl: PT1H
+    invitation-token-ttl: P7D
+    password-min-length: 8
+    password-max-length: 72
+    cleanup:
+      # Expired/consumed lifecycle rows (verification/reset tokens,
+      # settled invitations) are deleted by a scheduled sweep every
+      # `interval`. Live rows are never eligible. Static
+      # configuration: changes require a restart. Overridable via
+      # environment as APP_ACCOUNT_CLEANUP_*.
+      enabled: true
+      interval: PT24H
+
+  email:
+    # Outbound account email (email decision notes). `provider: log`
+    # records delivery attempts and sends nothing (development
+    # default); `provider: smtp` delivers through the relay below.
+    # Tokens ride in link query strings built from
+    # `frontend-base-url` — never logged, by either provider.
+    # Overridable via environment as APP_EMAIL_*.
+    provider: ${APP_EMAIL_PROVIDER:log}
+    from-address: ${APP_EMAIL_FROM_ADDRESS:no-reply@smartqueue.local}
+    frontend-base-url: ${APP_EMAIL_FRONTEND_BASE_URL:http://localhost:5173}
+    smtp:
+      host: ${APP_EMAIL_SMTP_HOST:}
+      port: ${APP_EMAIL_SMTP_PORT:1025}
+      username: ${APP_EMAIL_SMTP_USERNAME:}
+      password: ${APP_EMAIL_SMTP_PASSWORD:}
+      # STARTTLS for real external relays (Gmail/SES/etc.). Stays false
+      # for the local Mailpit relay, which speaks plain SMTP on the
+      # loopback interface. See docs/development/README.md ("Account email").
+      starttls-enabled: ${APP_EMAIL_SMTP_STARTTLS_ENABLED:false}
+    link-path:
+      verify-email: /verify-email
+      reset-password: /reset-password
+      invitation-accept: /invitations/accept
+
+  platform:
+    # Platform-administrator bootstrap (ADR-041): the account emails that
+    # hold platform-level review authority. Empty by default — an
+    # unconfigured platform fails CLOSED (review endpoints deny
+    # everyone) instead of crowning the first registered user. A listed
+    # address alone grants nothing: the account must exist, sign in with
+    # its own credentials, and have a verified email before the login
+    # flow attaches the PLATFORM_ADMIN role (re-checked per review
+    # call). Comma-separated via APP_PLATFORM_ADMIN_EMAILS.
+    # Operator setup: register the address as a normal customer account,
+    # verify its email, set this value, restart. Never commit a real
+    # address in shared files — production sets the environment value.
+    admin-emails: ${APP_PLATFORM_ADMIN_EMAILS:}
+
+  security:
+    rate-limit:      # Abuse protection for public auth endpoints (rate-limit decision
+      # notes): fixed-window budgets per scope/key, Redis-backed.
+      # Redis outage fails OPEN (logged) — protection degrades,
+      # authentication correctness never depends on Redis.
+      # Static configuration: changes require a restart.
+      # Overridable via environment as APP_SECURITY_RATE_LIMIT_*.
+      enabled: true
+      window: PT1M
+      login-max-attempts: 10
+      register-max-attempts: 10
+      recovery-max-attempts: 5
+      resend-max-attempts: 5
+      invitation-accept-max-attempts: 10
+
+management:
+  endpoints:
+    web:
+      # Health only. Never expose env/beans/mappings (see ADR decision notes).
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

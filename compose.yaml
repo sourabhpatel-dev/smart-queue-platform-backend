@@ -1,0 +1,55 @@
+# Local PostgreSQL + Redis (+ Mailpit) for development (Phases 1, 3B, 4I).
+# This file starts backend infrastructure only — no application or frontend
+# containers. Run from backend/:  docker compose up -d
+# The app runs on the host via .\mvnw.cmd spring-boot:run and connects over localhost.
+# Redis holds derived/ephemeral state only (see ADR-017): no volume —
+# losing it loses nothing authoritative. Mailpit is a development-only
+# SMTP sink + web UI for account emails (see the email decision notes):
+# no volume, no production role. More services arrive in their own
+# phases — do not add here.
+name: smart-queue-platform
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: smartqueue-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-smartqueue}
+      POSTGRES_USER: ${DB_USERNAME:-smartqueue}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-smartqueue}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - smartqueue-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: smartqueue-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: smartqueue-mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+volumes:
+  smartqueue-pgdata:
+    name: smartqueue-pgdata

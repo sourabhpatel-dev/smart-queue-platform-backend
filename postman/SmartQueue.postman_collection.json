@@ -1,0 +1,1849 @@
+{
+  "info": {
+    "name": "SmartQueue Platform API",
+    "description": "Complete Postman collection for the SmartQueue & Appointment Management Platform backend (Spring Boot 4.1.1, REST API v1). Covers health, authentication, registration, onboarding, branch/service/counter/staff management, working hours/holidays, appointment booking, queue processing, staff counter operations, notifications, analytics, platform administration, and security/tenant-isolation checks.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Health & Infrastructure",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health"]
+            },
+            "description": "Returns UP when all underlying infrastructure (PostgreSQL, Redis) is operational."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Authentication & Account",
+      "item": [
+        {
+          "name": "Customer Register (Public)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Asha Patel\",\n  \"email\": \"asha@example.com\",\n  \"password\": \"Secret123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            },
+            "description": "Registers a platform-level customer account with no organization context. Returns verificationRequired: true and dispatches verification email."
+          },
+          "response": []
+        },
+        {
+          "name": "Business Register (Public Application)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organizationName\": \"City Clinic\",\n  \"ownerName\": \"Mira Shah\",\n  \"ownerEmail\": \"mira@example.com\",\n  \"password\": \"Secret123!\",\n  \"branchName\": \"Main Street Branch\",\n  \"city\": \"Pune\",\n  \"country\": \"India\",\n  \"timeZone\": \"Asia/Kolkata\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register/business",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register", "business"]
+            },
+            "description": "Submits a business application (organization + initial branch + owner account + inactive owner membership). Requires platform admin review for activation."
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Customer / Owner / Staff)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.environment.set(\"customerToken\", jsonData.accessToken);",
+                  "    if (jsonData.organizationId) {",
+                  "        pm.environment.set(\"organizationId\", jsonData.organizationId);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{customerPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            },
+            "description": "Exchanges email and password for a short-lived Bearer JWT (1h expiration). Automatically saves customerToken and organizationId to environment variables."
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Email (Public)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"<verification-token-from-mailpit>\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/verify-email",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "verify-email"]
+            },
+            "description": "Consumes the single-use verification token received via email (retrieved from Mailpit in local dev)."
+          },
+          "response": []
+        },
+        {
+          "name": "Resend Verification (Public)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/resend-verification",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "resend-verification"]
+            },
+            "description": "Dispatches a fresh verification email if the account has a pending verification token."
+          },
+          "response": []
+        },
+        {
+          "name": "Forgot Password (Public)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/forgot-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "forgot-password"]
+            },
+            "description": "Triggers password recovery email if the account exists."
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Password (Public)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"<reset-token-from-mailpit>\",\n  \"newPassword\": \"NewSecret123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/reset-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "reset-password"]
+            },
+            "description": "Consumes password reset token and sets new password. Retires all prior active sessions."
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password (Authenticated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"Secret123!\",\n  \"newPassword\": \"NewSecret123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/change-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "change-password"]
+            },
+            "description": "Changes password for the currently authenticated user and revokes all other sessions."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Public Discovery",
+      "item": [
+        {
+          "name": "List Active Organizations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/discovery/organizations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "discovery", "organizations"]
+            },
+            "description": "Publicly lists ACTIVE organizations (id + name) eligible for discovery and booking."
+          },
+          "response": []
+        },
+        {
+          "name": "List Active Branches",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/discovery/branches?organizationId={{organizationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "discovery", "branches"],
+              "query": [
+                {
+                  "key": "organizationId",
+                  "value": "{{organizationId}}"
+                }
+              ]
+            },
+            "description": "Lists ACTIVE branches belonging to the specified ACTIVE organization."
+          },
+          "response": []
+        },
+        {
+          "name": "List Active Services",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/discovery/services?branchId={{branchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "discovery", "services"],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "{{branchId}}"
+                }
+              ]
+            },
+            "description": "Lists ACTIVE services belonging to the specified branch."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Organization & Branch Management",
+      "item": [
+        {
+          "name": "Get Organization",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/organizations/{{organizationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "organizations", "{{organizationId}}"]
+            },
+            "description": "Reads organization details for authorized members."
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Business Application",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/organizations/applications/mine",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "organizations", "applications", "mine"]
+            },
+            "description": "Returns the status of the caller's business application (PENDING_APPROVAL, ACTIVE, REJECTED)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Branches",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches"]
+            },
+            "description": "Lists branches belonging to the caller's organization (paginated, sortable, status filter)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Branch",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var locationHeader = pm.response.headers.get(\"Location\");",
+                  "    if (locationHeader) {",
+                  "        var segments = locationHeader.split(\"/\");",
+                  "        var id = segments[segments.length - 1];",
+                  "        pm.environment.set(\"branchId\", id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Downtown Branch\",\n  \"city\": \"Pune\",\n  \"country\": \"India\",\n  \"timeZone\": \"Asia/Kolkata\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches"]
+            },
+            "description": "Creates a new branch under the caller's organization (requires MANAGER or ADMIN role). Automatically captures branchId from Location header."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Branch",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}"]
+            },
+            "description": "Retrieves branch details by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Branch",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Downtown Central Branch\",\n  \"city\": \"Pune\",\n  \"country\": \"India\",\n  \"timeZone\": \"Asia/Kolkata\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}"]
+            },
+            "description": "Replaces mutable branch fields (requires MANAGER or ADMIN role)."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "activate"]
+            },
+            "description": "Activates a branch (idempotent)."
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/deactivate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "deactivate"]
+            },
+            "description": "Deactivates a branch (idempotent)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Services & Counters",
+      "item": [
+        {
+          "name": "List Branch Services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/services",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "services"]
+            },
+            "description": "Lists services for the specified branch."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Service",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var locationHeader = pm.response.headers.get(\"Location\");",
+                  "    if (locationHeader) {",
+                  "        var segments = locationHeader.split(\"/\");",
+                  "        var id = segments[segments.length - 1];",
+                  "        pm.environment.set(\"serviceId\", id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"General Consultation\",\n  \"description\": \"Primary medical checkup\",\n  \"durationMinutes\": 15\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/services",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "services"]
+            },
+            "description": "Creates a new service under the branch. Captures serviceId."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Service",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "services", "{{serviceId}}"]
+            },
+            "description": "Reads service details by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Service",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"General Consultation (Updated)\",\n  \"description\": \"Comprehensive medical checkup\",\n  \"durationMinutes\": 20\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "services", "{{serviceId}}"]
+            },
+            "description": "Updates service details."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "services", "{{serviceId}}", "activate"]
+            },
+            "description": "Activates a service."
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/services/{{serviceId}}/deactivate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "services", "{{serviceId}}", "deactivate"]
+            },
+            "description": "Deactivates a service."
+          },
+          "response": []
+        },
+        {
+          "name": "List Branch Counters",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/counters",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "counters"]
+            },
+            "description": "Lists counters for the branch."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Counter",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var locationHeader = pm.response.headers.get(\"Location\");",
+                  "    if (locationHeader) {",
+                  "        var segments = locationHeader.split(\"/\");",
+                  "        var id = segments[segments.length - 1];",
+                  "        pm.environment.set(\"counterId\", id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Counter 1\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/counters",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "counters"]
+            },
+            "description": "Creates a counter under the branch. Captures counterId."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Counter",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counters/{{counterId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counters", "{{counterId}}"]
+            },
+            "description": "Reads counter details by ID."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Counter",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Counter 1 - Primary\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counters/{{counterId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counters", "{{counterId}}"]
+            },
+            "description": "Updates counter name."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counters/{{counterId}}/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counters", "{{counterId}}", "activate"]
+            },
+            "description": "Activates a counter."
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate Counter",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counters/{{counterId}}/deactivate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counters", "{{counterId}}", "deactivate"]
+            },
+            "description": "Deactivates a counter."
+          },
+          "response": []
+        },
+        {
+          "name": "List Counter Capabilities",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counters/{{counterId}}/capabilities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counters", "{{counterId}}", "capabilities"]
+            },
+            "description": "Lists services that this counter is capable of serving."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Counter Capability",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"{{serviceId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counters/{{counterId}}/capabilities",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counters", "{{counterId}}", "capabilities"]
+            },
+            "description": "Associates a service capability with the counter (same branch enforced)."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Counter Capability",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counters/{{counterId}}/capabilities/{{serviceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counters", "{{counterId}}", "capabilities", "{{serviceId}}"]
+            },
+            "description": "Removes the service capability association from the counter."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. Staff & Membership Management",
+      "item": [
+        {
+          "name": "List Organization Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users"]
+            },
+            "description": "Lists users in the organization (MANAGER/ADMIN)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Staff User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Staff Member\",\n  \"email\": \"staff@example.com\",\n  \"password\": \"Secret123!\",\n  \"roles\": [\"STAFF\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users"]
+            },
+            "description": "Creates an operational staff or manager user in the organization."
+          },
+          "response": []
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}"]
+            },
+            "description": "Reads user profile and roles."
+          },
+          "response": []
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Staff Member Updated\",\n  \"roles\": [\"STAFF\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}"]
+            },
+            "description": "Updates user profile and roles."
+          },
+          "response": []
+        },
+        {
+          "name": "Activate User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}", "activate"]
+            },
+            "description": "Activates user account."
+          },
+          "response": []
+        },
+        {
+          "name": "Deactivate User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/deactivate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}", "deactivate"]
+            },
+            "description": "Deactivates user account (prevents login)."
+          },
+          "response": []
+        },
+        {
+          "name": "List User Staff Assignments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/staff-assignments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}", "staff-assignments"]
+            },
+            "description": "Lists branch assignments for a user."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Staff Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": \"{{branchId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{userId}}/staff-assignments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "users", "{{userId}}", "staff-assignments"]
+            },
+            "description": "Assigns user to a branch."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Branch Staff Roster",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/staff",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "staff"]
+            },
+            "description": "Lists branch staff roster."
+          },
+          "response": []
+        },
+        {
+          "name": "List Invitations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invitations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "invitations"]
+            },
+            "description": "Lists pending and historical invitations for the organization."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newstaff@example.com\",\n  \"role\": \"STAFF\",\n  \"branchId\": \"{{branchId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invitations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "invitations"]
+            },
+            "description": "Invites a staff or manager to the organization."
+          },
+          "response": []
+        },
+        {
+          "name": "Accept Invitation (Public)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"<invitation-token-from-mailpit>\",\n  \"email\": \"newstaff@example.com\",\n  \"displayName\": \"New Staff\",\n  \"password\": \"Secret123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/invitations/accept",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "invitations", "accept"]
+            },
+            "description": "Accepts an invitation, creating user account and active membership."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. Working Hours & Holidays",
+      "item": [
+        {
+          "name": "List Branch Working Hours",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/working-hours",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "working-hours"]
+            },
+            "description": "Lists weekly working hours for a branch."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Working Hour",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dayOfWeek\": \"MONDAY\",\n  \"openTime\": \"09:00:00\",\n  \"closeTime\": \"17:00:00\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/working-hours",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "working-hours"]
+            },
+            "description": "Sets working hours for a specific day of the week."
+          },
+          "response": []
+        },
+        {
+          "name": "List Branch Holidays",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/holidays",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "holidays"]
+            },
+            "description": "Lists holidays for a branch."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Holiday",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"holidayDate\": \"2026-12-25\",\n  \"description\": \"Christmas Holiday\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/holidays",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "holidays"]
+            },
+            "description": "Adds a holiday date when booking and queues are closed."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. Appointment Availability & Booking",
+      "item": [
+        {
+          "name": "Get Appointment Availability",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/appointments/availability?serviceId={{serviceId}}&date=2026-11-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "appointments", "availability"],
+              "query": [
+                {
+                  "key": "serviceId",
+                  "value": "{{serviceId}}"
+                },
+                {
+                  "key": "date",
+                  "value": "2026-11-01"
+                }
+              ]
+            },
+            "description": "Calculates available time slots for booking on a given date."
+          },
+          "response": []
+        },
+        {
+          "name": "Book Appointment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var locationHeader = pm.response.headers.get(\"Location\");",
+                  "    if (locationHeader) {",
+                  "        var segments = locationHeader.split(\"/\");",
+                  "        var id = segments[segments.length - 1];",
+                  "        pm.environment.set(\"appointmentId\", id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"{{serviceId}}\",\n  \"startTime\": \"2026-11-01T10:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "appointments"]
+            },
+            "description": "Books an appointment race-safely (no double booking). Captures appointmentId."
+          },
+          "response": []
+        },
+        {
+          "name": "List Appointments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/appointments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "appointments"]
+            },
+            "description": "Role-routed list of appointments for the caller."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Appointment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/appointments/{{appointmentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "appointments", "{{appointmentId}}"]
+            },
+            "description": "Privacy-first read of appointment details."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Appointment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/appointments/{{appointmentId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "appointments", "{{appointmentId}}", "cancel"]
+            },
+            "description": "Cancels an active appointment."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "9. Queue Joining & Customer Status",
+      "item": [
+        {
+          "name": "List Branch Queues",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.length > 0 && json[0].queueId) {",
+                  "        pm.environment.set(\"queueId\", json[0].queueId);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/queues",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "queues"]
+            },
+            "description": "Lists queues for the branch (one row per service). Captures queueId."
+          },
+          "response": []
+        },
+        {
+          "name": "Pre-Join Wait Estimate",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queues/{{queueId}}/pre-join-estimate?serviceId={{serviceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queues", "{{queueId}}", "pre-join-estimate"],
+              "query": [
+                {
+                  "key": "serviceId",
+                  "value": "{{serviceId}}"
+                }
+              ]
+            },
+            "description": "Calculates honest pre-join wait time estimate."
+          },
+          "response": []
+        },
+        {
+          "name": "Join Queue (Walk-in)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var locationHeader = pm.response.headers.get(\"Location\");",
+                  "    if (locationHeader) {",
+                  "        var segments = locationHeader.split(\"/\");",
+                  "        var id = segments[segments.length - 1];",
+                  "        pm.environment.set(\"queueEntryId\", id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"{{serviceId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{branchId}}/queues/{{queueId}}/entries",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "branches", "{{branchId}}", "queues", "{{queueId}}", "entries"]
+            },
+            "description": "Joins the walk-in queue and issues a daily token. Captures queueEntryId."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Queue Snapshot",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queues/{{queueId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queues", "{{queueId}}"]
+            },
+            "description": "Retrieves live queue snapshot (ranked positions and wait estimates)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Queue Entry",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue-entries/{{queueEntryId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue-entries", "{{queueEntryId}}"]
+            },
+            "description": "Privacy-first read of queue entry status."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Queue Entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue-entries/{{queueEntryId}}/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue-entries", "{{queueEntryId}}", "cancel"]
+            },
+            "description": "Cancels active queue entry."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10. Staff Queue & Counter Operations",
+      "item": [
+        {
+          "name": "Open Counter Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.sessionId) {",
+                  "        pm.environment.set(\"sessionId\", json.sessionId);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"counterId\": \"{{counterId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counter-sessions/open",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counter-sessions", "open"]
+            },
+            "description": "Opens a working counter session for staff operation. Captures sessionId."
+          },
+          "response": []
+        },
+        {
+          "name": "Call Next Queue Entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counters/{{counterId}}/call-next",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counters", "{{counterId}}", "call-next"]
+            },
+            "description": "Atomically claims the next waiting customer in the queue (SKIP LOCKED)."
+          },
+          "response": []
+        },
+        {
+          "name": "Start Serving Queue Entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue-entries/{{queueEntryId}}/start-serving",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue-entries", "{{queueEntryId}}", "start-serving"]
+            },
+            "description": "Transitions CALLED entry to SERVING and starts a service session."
+          },
+          "response": []
+        },
+        {
+          "name": "Complete Queue Entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/queue-entries/{{queueEntryId}}/complete",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "queue-entries", "{{queueEntryId}}", "complete"]
+            },
+            "description": "Transitions SERVING entry to COMPLETED and records service duration fact."
+          },
+          "response": []
+        },
+        {
+          "name": "Close Counter Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"counterId\": \"{{counterId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/counter-sessions/close",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "counter-sessions", "close"]
+            },
+            "description": "Closes an active counter session."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "11. Notifications",
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "notifications"]
+            },
+            "description": "Lists in-app notifications for the authenticated user."
+          },
+          "response": []
+        },
+        {
+          "name": "Mark All Notifications Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/notifications/read-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "notifications", "read-all"]
+            },
+            "description": "Marks all unread notifications as read."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "12. Analytics & Reporting",
+      "item": [
+        {
+          "name": "Branch Summary Analytics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{ownerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/analytics/branches/{{branchId}}/summary?startDate=2026-10-01&endDate=2026-10-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "analytics", "branches", "{{branchId}}", "summary"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2026-10-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2026-10-31"
+                }
+              ]
+            },
+            "description": "Operational summary analytics (measured waits and durations)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "13. Platform Administration",
+      "item": [
+        {
+          "name": "List Pending Applications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{platformAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/platform/organizations?status=PENDING_APPROVAL",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "platform", "organizations"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "PENDING_APPROVAL"
+                }
+              ]
+            },
+            "description": "Lists pending organization applications for platform administrators."
+          },
+          "response": []
+        },
+        {
+          "name": "Approve Organization Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{platformAdminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/platform/organizations/{{organizationId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "platform", "organizations", "{{organizationId}}", "approve"]
+            },
+            "description": "Approves organization and owner membership atomically (requires PLATFORM_ADMIN authority)."
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Organization Application",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{platformAdminToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Insufficient operational documentation provided.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/platform/organizations/{{organizationId}}/reject",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "platform", "organizations", "{{organizationId}}", "reject"]
+            },
+            "description": "Rejects organization application with applicant-facing feedback."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "14. Authorization & Tenant-Isolation Checks",
+      "item": [
+        {
+          "name": "Unauthorized Anonymous Request (Expect 401)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/organizations/{{organizationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "organizations", "{{organizationId}}"]
+            },
+            "description": "Tests that unauthenticated requests to protected endpoints return 401 UNAUTHENTICATED."
+          },
+          "response": []
+        },
+        {
+          "name": "Cross-Tenant / Forbidden Access (Expect 403/404)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/organizations/{{organizationId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "organizations", "{{organizationId}}"]
+            },
+            "description": "Tests tenant isolation and scope enforcement."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
